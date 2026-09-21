@@ -172,6 +172,17 @@ tie the project back to you. To check one-off terms without storing them:
 python3 tools/privacy_audit.py --forbid some-term --fail-on medium
 ```
 
+The audit also runs as a **pre-commit hook**, so it cannot be skipped by forgetting:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+It fails closed — if the scanner cannot run at all, the commit is refused rather than
+allowed silently. `git commit --no-verify` bypasses it; if you ever use that, fix the
+finding immediately, because the hook only checks the working tree, not the history
+you just wrote.
+
 The repo carries a **neutral, repo-local git identity** so personal global settings
 are never embedded. Set it before the first commit if it is not already:
 
