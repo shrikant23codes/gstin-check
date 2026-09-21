@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="GSTIN Check">
+  <title>GSTIN Check</title>
+  <rect width="512" height="512" rx="112" fill="#16130f"/>
+  <!-- receipt with a torn bottom edge -->
+  <path d="M156 104 H356 V372
+           L346 388 336 372 326 388 316 372 306 388 296 372 286 388 276 372
+           266 388 256 372 246 388 236 372 226 388 216 372 206 388 196 372
+           186 388 176 372 166 388 156 372 Z"
+        fill="#faf7f1"/>
+  <!-- the printed rules -->
+  <g fill="#16130f" opacity="0.30">
+    <rect x="196" y="160" width="120" height="16" rx="8"/>
+    <rect x="196" y="204" width="120" height="16" rx="8"/>
+    <rect x="196" y="248" width="72" height="16" rx="8"/>
+  </g>
+  <!-- the verified tick -->
+  <path d="M232 322 L266 356 L328 286" fill="none" stroke="#e08a2e"
+        stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

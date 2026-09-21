@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GSTIN Check — is this bill's GST collectible?</title>
+<meta name="description" content="Scan a GSTIN off a bill, verify it, and see whether the supplier may legally collect GST from you.">
+<meta name="theme-color" content="#16130f">
+<meta name="color-scheme" content="light dark">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* ---------------------------------------------------------------------------
+   Tokens. A "thermal receipt" palette: warm paper, ink, one saffron accent.
+   Verdict colours are the only other hues and they carry meaning, not mood.
+--------------------------------------------------------------------------- */
+:root {
+  --paper:      oklch(0.983 0.006 85);
+  --card:       oklch(1 0 0);
+  --ink:        oklch(0.235 0.012 62);
+  --ink-soft:   oklch(0.44 0.012 62);
+  --muted:      oklch(0.60 0.010 62);
+  --line:       oklch(0.905 0.006 80);
+  --line-firm:  oklch(0.84 0.008 80);
+  --accent:     oklch(0.58 0.145 52);
+  --accent-ink: oklch(0.30 0.06 52);
+  --accent-wash:oklch(0.965 0.022 62);
+  --ok:         oklch(0.50 0.115 158);
+  --ok-wash:    oklch(0.965 0.028 158);
+  --warn:       oklch(0.58 0.115 72);
+  --warn-wash:  oklch(0.968 0.038 82);
+  --bad:        oklch(0.505 0.185 27);
+  --bad-wash:   oklch(0.965 0.030 27);
+  --shadow:     0 1px 2px oklch(0.4 0.02 62 / 0.06), 0 6px 18px oklch(0.4 0.02 62 / 0.06);
+  --r:          10px;
+  --r-lg:       16px;
+  --ui:         "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:       "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper:      oklch(0.185 0.010 62);
+    --card:       oklch(0.225 0.011 62);
+    --ink:        oklch(0.955 0.006 85);
+    --ink-soft:   oklch(0.78 0.010 70);
+    --muted:      oklch(0.63 0.010 70);
+    --line:       oklch(0.305 0.012 62);
+    --line-firm:  oklch(0.39 0.013 62);
+    --accent:     oklch(0.76 0.135 62);
+    --accent-ink: oklch(0.90 0.05 62);
+    --accent-wash:oklch(0.27 0.028 60);
+    --ok:         oklch(0.75 0.135 158);
+    --ok-wash:    oklch(0.26 0.030 158);
+    --warn:       oklch(0.80 0.125 80);
+    --warn-wash:  oklch(0.27 0.032 80);
+    --bad:        oklch(0.72 0.155 27);
+    --bad-wash:   oklch(0.27 0.045 27);
+    --shadow:     0 1px 2px oklch(0 0 0 / 0.3), 0 6px 20px oklch(0 0 0 / 0.25);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  font-family: var(--ui);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+:focus-visible { outline: 2.5px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+
+.shell { max-width: 30rem; margin: 0 auto; padding: 0 1rem 4rem; }
+
+/* --- masthead ------------------------------------------------------------ */
+.masthead {
+  display: flex; align-items: center; gap: .75rem;
+  padding: .85rem 0 .75rem;
+  position: sticky; top: 0; z-index: 20;
+  background: linear-gradient(var(--paper) 72%, transparent);
+}
+.brand { display: flex; align-items: center; gap: .55rem; margin-right: auto; min-width: 0; }
+.brand svg { flex: none; }
+.brand b { font-size: .95rem; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; }
+.brand span { display: block; font-size: .72rem; color: var(--muted); font-family: var(--mono); }
+.iconbtn {
+  width: 44px; height: 44px; display: grid; place-items: center;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+  cursor: pointer; color: var(--ink-soft);
+}
+.iconbtn:hover { border-color: var(--line-firm); color: var(--ink); }
+/* --- the input surface --------------------------------------------------- */
+.panel {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg);
+  box-shadow: var(--shadow); padding: 1rem; margin-bottom: .9rem;
+}
+.panel h2 {
+  margin: 0 0 .7rem; font-size: .8rem; font-weight: 600; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--muted);
+}
+.capture {
+  border: 1.5px dashed var(--line-firm); border-radius: var(--r);
+  padding: 1.4rem 1rem; text-align: center; background: var(--paper);
+}
+.capture p { margin: .1rem 0 1rem; color: var(--ink-soft); font-size: .9rem; }
+.row { display: flex; gap: .5rem; flex-wrap: wrap; }
+.row > * { flex: 1 1 0; min-width: 8rem; }
+
+.btn {
+  min-height: 46px; padding: .6rem .85rem; border-radius: var(--r);
+  border: 1px solid var(--line-firm); background: var(--card); color: var(--ink);
+  font-weight: 500; cursor: pointer; display: inline-flex; align-items: center;
+  justify-content: center; gap: .45rem; text-align: center;
+}
+.btn:hover { border-color: var(--muted); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-primary {
+  background: var(--accent); border-color: transparent; color: oklch(0.16 0.02 60);
+  font-weight: 600;
+}
+.btn-primary:hover { filter: brightness(1.06); }
+.btn-ghost { background: transparent; border-color: transparent; color: var(--ink-soft); text-decoration: underline; }
+.btn-ghost:hover { color: var(--ink); }
+
+label.field { display: block; margin-top: .85rem; }
+label.field > span { display: block; font-size: .78rem; color: var(--muted); margin-bottom: .3rem; }
+input[type=text], input[type=url], input[type=number], textarea, select {
+  width: 100%; padding: .6rem .7rem; background: var(--paper);
+  border: 1px solid var(--line-firm); border-radius: var(--r);
+}
+input.mono, .mono { font-family: var(--mono); }
+#gstinInput { letter-spacing: .04em; text-transform: uppercase; font-family: var(--mono); }
+
+/* --- recognise progress -------------------------------------------------- */
+.steps { list-style: none; margin: 0; padding: 0; font-size: .88rem; }
+.steps li { display: flex; gap: .6rem; align-items: baseline; padding: .2rem 0; color: var(--muted); }
+.steps li::before { content: "○"; font-family: var(--mono); }
+.steps li[data-state=active] { color: var(--ink); }
+.steps li[data-state=active]::before { content: "◐"; }
+.steps li[data-state=done] { color: var(--ink-soft); }
+.steps li[data-state=done]::before { content: "●"; color: var(--ok); }
+.bar { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; margin-top: .7rem; }
+.bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s linear; }
+
+/* --- the inspected object ------------------------------------------------ */
+.gstin-row { display: flex; align-items: baseline; gap: .5rem; flex-wrap: wrap; }
+.gstin {
+  font-family: var(--mono); font-size: 1.22rem; font-weight: 600;
+  letter-spacing: .02em; word-break: break-all; margin: 0;
+}
+.chip {
+  font-size: .7rem; font-family: var(--mono); padding: .16rem .42rem; border-radius: 999px;
+  border: 1px solid var(--line-firm); color: var(--ink-soft); white-space: nowrap;
+}
+.chip[data-tone=ok] { border-color: var(--ok); color: var(--ok); background: var(--ok-wash); }
+.chip[data-tone=warn] { border-color: var(--warn); color: var(--warn); background: var(--warn-wash); }
+.chip[data-tone=bad] { border-color: var(--bad); color: var(--bad); background: var(--bad-wash); }
+.chip[data-tone=accent] { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-wash); }
+
+dl.facts { display: grid; grid-template-columns: auto 1fr; gap: .35rem .9rem; margin: .9rem 0 0; font-size: .88rem; }
+dl.facts dt { color: var(--muted); white-space: nowrap; }
+dl.facts dd { margin: 0; font-weight: 500; }
+dl.facts dd.mono { font-family: var(--mono); font-weight: 400; }
+
+/* --- verdict ------------------------------------------------------------- */
+.verdict { border-top: 3px solid var(--muted); }
+.verdict[data-level=ok] { border-top-color: var(--ok); background: var(--ok-wash); }
+.verdict[data-level=warn] { border-top-color: var(--warn); background: var(--warn-wash); }
+.verdict[data-level=illegal] { border-top-color: var(--bad); background: var(--bad-wash); }
+.verdict h3 { margin: 0 0 .5rem; font-size: 1.1rem; line-height: 1.3; letter-spacing: -.01em; }
+.verdict p { margin: 0 0 .55rem; font-size: .9rem; color: var(--ink-soft); }
+.verdict p:last-child { margin-bottom: 0; }
+.verdict .amount {
+  font-family: var(--mono); font-size: 1.5rem; font-weight: 600;
+  color: var(--bad); display: block; margin: .3rem 0 .5rem;
+}
+.verdict ul.legal { margin: .6rem 0 0; padding-left: 1.1rem; font-size: .8rem; color: var(--muted); }
+.verdict ul.legal li { margin-bottom: .25rem; }
+
+/* --- editable bill figures ---------------------------------------------- */
+.figures { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+.figures label.field { margin-top: 0; }
+.switch { display: flex; align-items: center; gap: .55rem; margin: .9rem 0 .2rem; font-size: .9rem; }
+.switch input { width: 20px; height: 20px; accent-color: var(--accent); flex: none; }
+details { margin-top: .8rem; }
+summary { cursor: pointer; font-size: .84rem; color: var(--muted); min-height: 32px; }
+summary:hover { color: var(--ink); }
+pre.raw {
+  font-family: var(--mono); font-size: .74rem; line-height: 1.45; white-space: pre-wrap;
+  word-break: break-word; background: var(--paper); border: 1px solid var(--line);
+  border-radius: var(--r); padding: .6rem; max-height: 15rem; overflow: auto; margin: .5rem 0 0;
+}
+table.evidence { width: 100%; border-collapse: collapse; font-size: .8rem; margin-top: .5rem; }
+table.evidence td { padding: .25rem .3rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.evidence td:first-child { color: var(--muted); white-space: nowrap; }
+table.evidence td:last-child { font-family: var(--mono); white-space: nowrap; text-align: right; }
+
+.candidates { list-style: none; margin: .5rem 0 0; padding: 0; }
+.candidates li { border: 1px solid var(--line); border-radius: var(--r); margin-bottom: .4rem; }
+.candidates button {
+  width: 100%; text-align: left; background: none; border: 0; padding: .6rem .7rem;
+  cursor: pointer; display: flex; gap: .6rem; align-items: baseline; justify-content: space-between;
+}
+.candidates button:hover { background: var(--accent-wash); }
+.candidates .g { font-family: var(--mono); }
+.candidates .m { font-size: .74rem; color: var(--muted); }
+
+.note { font-size: .78rem; color: var(--muted); margin: .7rem 0 0; }
+.note a { color: var(--accent-ink); }
+.empty { text-align: center; color: var(--muted); font-size: .88rem; padding: 1.4rem .5rem; }
+
+/* --- dialogs ------------------------------------------------------------- */
+dialog {
+  border: 0; padding: 0; background: transparent; max-width: 30rem; width: 100%;
+  margin: auto; color: var(--ink);
+}
+dialog::backdrop { background: oklch(0.2 0.01 62 / 0.5); }
+dialog .sheet {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg);
+  padding: 1rem; box-shadow: var(--shadow); max-height: 88vh; overflow: auto;
+}
+.sheet-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .8rem; }
+.sheet-head h2 { margin: 0 auto 0 0; font-size: 1rem; font-weight: 600; }
+.hist { list-style: none; margin: 0; padding: 0; }
+.hist li { border-bottom: 1px solid var(--line); }
+.hist button {
+  width: 100%; background: none; border: 0; padding: .65rem .1rem; cursor: pointer;
+  display: flex; gap: .5rem; align-items: baseline; text-align: left;
+}
+.hist .g { font-family: var(--mono); font-size: .84rem; }
+.hist .w { margin-left: auto; font-size: .72rem; color: var(--muted); }
+.hist .d { display: block; font-size: .72rem; color: var(--muted); }
+
+.toast {
+  /* Sits just clear of the bottom edge and never swallows a tap. */
+  position: fixed; left: 50%; bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  transform: translate(-50%, 1rem); pointer-events: none;
+  background: var(--ink); color: var(--paper); padding: .6rem 1rem; border-radius: 999px;
+  font-size: .85rem; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s;
+  z-index: 60; max-width: 90vw; text-align: center;
+}
+.toast[data-show] { opacity: 1; transform: translate(-50%, 0); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+[hidden] { display: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <header class="masthead">
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+        <path d="M5 2.5h16v18.2l-2.3-1.6-2.3 1.6-2.3-1.6-2.3 1.6-2.3-1.6-2.3 1.6-2.2-1.6z"
+              fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+        <path d="M9 9.2h8M9 13h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <b>GSTIN Check</b>
+        <span>may this supplier collect GST?</span>
+      </div>
+    </div>
+    <button class="iconbtn" id="historyBtn" title="History" aria-label="History">
+      <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <circle cx="10" cy="10" r="7.2"/><path d="M10 5.6V10l3 1.8" stroke-linecap="round"/>
+      </svg>
+    </button>
+    <button class="iconbtn" id="settingsBtn" title="Settings" aria-label="Settings">
+      <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <circle cx="10" cy="10" r="2.6"/>
+        <path d="M10 2.4v2M10 15.6v2M2.4 10h2M15.6 10h2M4.6 4.6l1.4 1.4M14 14l1.4 1.4M15.4 4.6L14 6M6 14l-1.4 1.4" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </header>
+
+  <!-- ===================== STEP 1: get a GSTIN ===================== -->
+  <section class="panel" id="capturePanel" aria-labelledby="captureH">
+    <h2 id="captureH">1 — Read the number off the bill</h2>
+    <div class="capture">
+      <p>Point at the GSTIN printed on the bill, or type it in.</p>
+      <div class="row">
+        <button class="btn btn-primary" id="cameraBtn">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+            <path d="M2.5 6.5h3l1.3-2h6.4l1.3 2h3v9h-15z" stroke-linejoin="round"/><circle cx="10" cy="11" r="2.9"/>
+          </svg>
+          Scan bill
+        </button>
+        <button class="btn" id="photoBtn">Choose photo</button>
+      </div>
+      <input type="file" id="cameraInput" accept="image/*" capture="environment" class="sr">
+      <input type="file" id="photoInput" accept="image/*" class="sr">
+    </div>
+    <label class="field" for="gstinInput">
+      <span>Or type the 15 characters</span>
+      <input type="text" id="gstinInput" class="mono" inputmode="text" autocomplete="off"
+             spellcheck="false" maxlength="24" placeholder="27AAPFU0939F1ZV">
+    </label>
+    <p class="note" id="typeHint" hidden></p>
+  </section>
+
+  <!-- ===================== STEP 2: progress ===================== -->
+  <section class="panel" id="progressPanel" hidden aria-labelledby="progressH">
+    <h2 id="progressH">Reading the image</h2>
+    <ul class="steps" id="steps">
+      <li data-step="load">Load the photo</li>
+      <li data-step="ocr">Read all the text on the bill</li>
+      <li data-step="find">Find the GSTIN</li>
+      <li data-step="verify">Check the check digit</li>
+    </ul>
+    <div class="bar" role="progressbar" aria-labelledby="progressH"><i id="barFill"></i></div>
+  </section>
+
+  <!-- ===================== STEP 3: result ===================== -->
+  <div id="result" hidden>
+
+    <section class="panel" aria-labelledby="numberH">
+      <h2 id="numberH">2 — The number</h2>
+      <div class="gstin-row">
+        <p class="gstin" id="gstinText"></p>
+        <span class="chip" id="confidenceChip"></span>
+      </div>
+      <dl class="facts" id="facts"></dl>
+      <p class="note" id="factsLegend" hidden></p>
+      <div id="issues"></div>
+      <div id="repairBox" hidden></div>
+    </section>
+
+    <section class="panel verdict" id="verdictCard" role="region" aria-label="Verdict">
+      <h3 id="verdictHeadline"></h3>
+      <div id="verdictBody"></div>
+      <div id="verdictLegal"></div>
+      <div id="verdictActions" class="row" style="margin-top:.9rem"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="billH">
+      <h2 id="billH">3 — What the bill charged</h2>
+      <div class="switch">
+        <input type="checkbox" id="taxCharged">
+        <label for="taxCharged">This bill adds CGST / SGST / IGST</label>
+      </div>
+      <div class="figures">
+        <label class="field"><span>Taxable value</span>
+          <input type="number" id="taxableValue" class="mono" step="0.01" min="0" placeholder="641.90"></label>
+        <label class="field"><span>Tax added</span>
+          <input type="number" id="taxAmount" class="mono" step="0.01" min="0" placeholder="32.10"></label>
+      </div>
+      <p class="note" id="rateNote" hidden></p>
+      <details id="evidenceBox" hidden>
+        <summary>What was read off the bill</summary>
+        <table class="evidence" id="evidenceTable"></table>
+      </details>
+    </section>
+
+    <section class="panel" aria-labelledby="liveH">
+      <h2 id="liveH">4 — Registration status</h2>
+      <div id="liveBody"></div>
+      <details id="rawBox" hidden>
+        <summary>Raw response</summary>
+        <pre class="raw" id="rawResponse"></pre>
+      </details>
+    </section>
+
+    <details id="ocrBox">
+      <summary>All text read from the image</summary>
+      <pre class="raw" id="ocrText"></pre>
+    </details>
+
+    <p class="note">
+      Informational only, not legal or tax advice. The authoritative source is the
+      <a href="https://services.gst.gov.in/services/searchtp" target="_blank" rel="noopener">GST portal's own search</a>.
+      Section 10(4) of the CGST Act, 2017 is what makes a composition dealer's GST non-collectible.
+    </p>
+  </div>
+</div>
+
+<!-- ===================== history ===================== -->
+<dialog id="historyDlg"><div class="sheet">
+  <div class="sheet-head">
+    <h2>Recent checks</h2>
+    <button class="btn" id="clearHistory">Clear</button>
+    <button class="iconbtn" data-close aria-label="Close">✕</button>
+  </div>
+  <ul class="hist" id="histList"></ul>
+  <p class="empty" id="histEmpty">Nothing yet. Scanned bills are kept on this device only.</p>
+</div></dialog>
+
+<!-- ===================== settings ===================== -->
+<dialog id="settingsDlg"><div class="sheet">
+  <div class="sheet-head">
+    <h2>Settings</h2>
+    <button class="iconbtn" data-close aria-label="Close">✕</button>
+  </div>
+
+  <label class="field" for="providerMode">
+    <span>Registration-status lookup</span>
+    <select id="providerMode">
+      <option value="offline">Offline only — structure + check digit</option>
+      <option value="gstincheck">GSTINCheck free-tier API key</option>
+      <option value="custom">A lookup endpoint of my own</option>
+    </select>
+  </label>
+
+  <div id="gstincheckFields" hidden>
+    <label class="field" for="apiKey">
+      <span>API key (stored on this device)</span>
+      <input type="text" id="apiKey" class="mono" autocomplete="off" spellcheck="false" placeholder="your-key">
+    </label>
+    <p class="note">Used as <code class="mono">sheet.gstincheck.co.in/check/&lt;key&gt;/&lt;gstin&gt;</code>.</p>
+  </div>
+
+  <div id="customFields" hidden>
+    <label class="field" for="customUrl">
+      <span>URL template — <code class="mono">{gstin}</code> and <code class="mono">{key}</code> are substituted</span>
+      <input type="url" id="customUrl" class="mono" autocomplete="off" spellcheck="false"
+             placeholder="https://api.example.com/gstin/{gstin}">
+    </label>
+    <label class="field" for="proxyBase">
+      <span>Optional proxy prefix (needed if the endpoint blocks browsers)</span>
+      <input type="url" id="proxyBase" class="mono" autocomplete="off" spellcheck="false"
+             placeholder="https://your-relay.example.com/api/lookup">
+    </label>
+  </div>
+
+  <p class="note">
+    The GST portal itself is behind a bot check, so it cannot be queried from here — the
+    <b>Check on GST portal</b> button copies the number and opens the official page for you instead.
+    Whatever you enter above never leaves this device except as the lookup request itself. Run the bundled server with <code class="mono">-allow-host</code> to get a relay at <code class="mono">/api/lookup</code>.
+  </p>
+  <div class="row" style="margin-top:1rem">
+    <button class="btn btn-primary" id="saveSettings">Save</button>
+  </div>
+</div></dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<canvas id="work" hidden></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js"></script>
+<script src="gstin-core.js"></script>
+<script src="bill-parse.js"></script>
+<script src="image-prep.js"></script>
+<script>
+(function () {
+  'use strict';
+  var C = window.GstinCore;
+  var BP = window.BillParse;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var GST_PORTAL_SEARCH = 'https://services.gst.gov.in/services/searchtp';
+  var GRIEVANCE = 'https://selfservice.gstsystem.in/';
+  var CONSUMER_HELPLINE = 'https://consumerhelpline.gov.in/';
+
+  var state = {
+    ocrText: '',
+    candidates: [],
+    decoded: null,
+    bill: null,
+    live: null,
+    provider: null
+  };
+
+  // ------------------------------------------------------------------ settings
+  function loadSettings() {
+    var defaults = { mode: 'offline', key: '', customUrl: '', proxyBase: '' };
+    try {
+      var raw = localStorage.getItem('gstinCheck.settings');
+      return raw ? Object.assign(defaults, JSON.parse(raw)) : defaults;
+    } catch (e) { return defaults; }
+  }
+  function saveSettings(s) {
+    try { localStorage.setItem('gstinCheck.settings', JSON.stringify(s)); } catch (e) {}
+  }
+
+  // ------------------------------------------------------------------- history
+  function history() {
+    try { return JSON.parse(localStorage.getItem('gstinCheck.history') || '[]'); } catch (e) { return []; }
+  }
+  function remember(entry) {
+    var h = history().filter(function (e) { return e.gstin !== entry.gstin; });
+    h.unshift(entry);
+    try { localStorage.setItem('gstinCheck.history', JSON.stringify(h.slice(0, 50))); } catch (e) {}
+  }
+
+  // --------------------------------------------------------------------- toast
+  var toastTimer;
+  function toast(msg) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.setAttribute('data-show', '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.removeAttribute('data-show'); }, 3200);
+  }
+
+  function copy(text, msg) {
+    var done = function () { toast(msg); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text, msg); });
+    } else { fallbackCopy(text, msg); }
+  }
+  function fallbackCopy(text, msg) {
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.top = '-1000px';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast(msg); } catch (e) { toast('Could not copy'); }
+    document.body.removeChild(ta);
+  }
+
+  // ------------------------------------------------------------------ the model
+  /** Rebuild everything below the number: verdict, actions, status section. */
+  function refresh() {
+    var d = state.decoded;
+    if (!d) return;
+    var bill = state.bill || {};
+    var live = state.live || { status: C.STATUS.UNKNOWN, verified: false };
+
+    var v = C.verdict({
+      status: live.status,
+      verified: live.verified,
+      taxCharged: !!bill.taxCharged,
+      taxableValue: bill.taxableValue,
+      taxAmount: bill.taxAmount,
+      invoiceKind: bill.invoiceKind,
+      decoded: d
+    });
+
+    var card = $('verdictCard');
+    card.setAttribute('data-level', v.level);
+    $('verdictHeadline').textContent = v.headline;
+
+    var body = $('verdictBody');
+    body.innerHTML = '';
+    if (v.refundable > 0) {
+      var amt = document.createElement('span');
+      amt.className = 'amount';
+      amt.textContent = '₹' + C.money(v.refundable) + ' not collectible';
+      body.appendChild(amt);
+    }
+    v.lines.forEach(function (line) {
+      var p = document.createElement('p');
+      p.textContent = line;
+      body.appendChild(p);
+    });
+
+    var legal = $('verdictLegal');
+    legal.innerHTML = '';
+    if (v.legal.length) {
+      var details = document.createElement('details');
+      var sum = document.createElement('summary');
+      sum.textContent = 'The rule this is based on';
+      details.appendChild(sum);
+      var ul = document.createElement('ul');
+      ul.className = 'legal';
+      v.legal.forEach(function (l) {
+        var li = document.createElement('li'); li.textContent = l; ul.appendChild(li);
+      });
+      details.appendChild(ul);
+      legal.appendChild(details);
+    }
+
+    // actions
+    var acts = $('verdictActions');
+    acts.innerHTML = '';
+    if (v.level === 'illegal') {
+      acts.appendChild(btn('Raise a complaint', 'btn btn-primary', function () {
+        copy(d.gstin + '\nSupplier GSTIN charged GST as a ' + v.statusLabel.toLowerCase() + '.',
+             'Complaint text copied');
+        window.open(GRIEVANCE, '_blank', 'noopener');
+      }));
+      acts.appendChild(btn('Consumer helpline', 'btn', function () {
+        window.open(CONSUMER_HELPLINE, '_blank', 'noopener');
+      }));
+    } else {
+      acts.appendChild(btn('Copy summary', 'btn', function () {
+        copy(summaryText(v), 'Summary copied');
+      }));
+    }
+
+    renderLive(live, v);
+    renderRate(bill);
+  }
+
+  function btn(label, cls, fn) {
+    var b = document.createElement('button');
+    b.className = cls; b.type = 'button'; b.textContent = label;
+    b.addEventListener('click', fn);
+    return b;
+  }
+
+  /**
+   * A panel that only makes sense for the scan in hand (a candidate picker, a
+   * "nothing found" notice). Replaces any previous one, so repeated scans do not
+   * stack stale boxes down the page.
+   */
+  function transientPanel() {
+    Array.prototype.forEach.call(document.querySelectorAll('.js-transient'), function (n) { n.remove(); });
+    var box = document.createElement('section');
+    box.className = 'panel js-transient';
+    $('result').parentNode.insertBefore(box, $('result'));
+    return box;
+  }
+
+  function summaryText(v) {
+    var d = state.decoded, b = state.bill || {};
+    var lines = [
+      'GSTIN: ' + d.gstin,
+      'State: ' + d.stateName,
+      'Status: ' + v.statusLabel + (v.verified ? ' (from the GST portal)' : ' (not verified)'),
+      'Check digit: ' + (d.checksumOk ? 'valid' : 'INVALID'),
+      b.taxCharged ? 'Bill added GST: ₹' + C.money(b.taxAmount) : 'Bill added no GST',
+      '',
+      v.headline
+    ];
+    return lines.join('\n');
+  }
+
+  function renderRate(bill) {
+    var n = $('rateNote');
+    if (bill.taxableValue > 0 && bill.taxAmount > 0) {
+      var rate = +(bill.taxAmount / bill.taxableValue * 100).toFixed(2);
+      n.textContent = 'That is ' + rate + '% on the taxable value.' +
+        (/TAX INVOICE|GRAND TOTAL|CGST/.test(state.ocrText.toUpperCase()) ? '' : ' Read from what you entered.');
+      n.hidden = false;
+    } else {
+      n.hidden = true;
+    }
+  }
+
+  function renderLive(live, v) {
+    var host = $('liveBody');
+    host.innerHTML = '';
+    var p = document.createElement('p');
+    p.style.margin = '0 0 .6rem';
+    p.style.fontSize = '.9rem';
+
+    var chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.setAttribute('data-tone', v.cannotCollect ? 'bad' : (live.verified ? 'ok' : 'warn'));
+    chip.textContent = live.verified ? v.statusLabel : 'not checked yet';
+
+    var row = document.createElement('div');
+    row.className = 'gstin-row';
+    row.appendChild(chip);
+    host.appendChild(row);
+
+    p.textContent = live.verified
+      ? 'Reported by the lookup endpoint you configured. Confirm on the GST portal before relying on it.'
+      : 'A GSTIN that passes its check digit can still belong to a composition dealer. Only a live lookup settles that — and the GST portal is the only source that counts.';
+    p.style.marginTop = '.6rem';
+    host.appendChild(p);
+
+    var actions = document.createElement('div');
+    actions.className = 'row';
+    actions.appendChild(btn('Check on GST portal', 'btn btn-primary', function () {
+      copy(state.decoded.gstin, 'GSTIN copied — paste it into the Search box');
+      window.open(GST_PORTAL_SEARCH, '_blank', 'noopener');
+    }));
+    host.appendChild(actions);
+
+    actions.style.marginTop = '.75rem';
+
+    if (state.provider && state.provider.mode !== 'offline') {
+      var b = btn('Look up status now', 'btn', function () {
+        b.disabled = true; b.textContent = 'Looking up…';
+        lookup(state.decoded.gstin).then(function (res) {
+          state.live = res;
+          if (res.raw) { $('rawResponse').textContent = typeof res.raw === 'string' ? res.raw : JSON.stringify(res.raw, null, 2); $('rawBox').hidden = false; }
+          if (!res.verified) toast(res.error || 'No status returned');
+          refresh();
+        });
+      });
+      host.appendChild(b);
+    }
+  }
+
+  // ------------------------------------------------------------------- lookup
+  function mapLiveStatus(json) {
+    var found = { scheme: null, state: null };
+    (function walk(node) {
+      if (node == null || found.scheme) return;
+      if (typeof node === 'string') {
+        var s = node;
+        if (/composition|composite\s*levy/i.test(s)) found.scheme = C.STATUS.COMPOSITION;
+        else if (/suspend/i.test(s)) found.state = found.state || C.STATUS.SUSPENDED;
+        else if (/cancell?ed|inactive|de-?registered/i.test(s)) found.state = found.state || C.STATUS.CANCELLED;
+        else if (/not\s*(found|exist)|invalid|no\s*record/i.test(s)) found.state = found.state || C.STATUS.INVALID;
+        else if (/^active$|regular|normal\s*taxpayer/i.test(s)) found.state = found.state || C.STATUS.REGULAR;
+        return;
+      }
+      if (typeof node === 'object') {
+        for (var k in node) { if (Object.prototype.hasOwnProperty.call(node, k)) walk(node[k]); }
+      }
+    })(json);
+    return found.scheme || found.state || C.STATUS.UNKNOWN;
+  }
+
+  function lookup(gstin) {
+    var cfg = loadSettings();
+    if (cfg.mode === 'offline') {
+      return Promise.resolve({ status: C.STATUS.UNKNOWN, verified: false, error: 'Offline mode' });
+    }
+    var url;
+    if (cfg.mode === 'gstincheck') {
+      url = 'https://sheet.gstincheck.co.in/check/' + encodeURIComponent(cfg.key || '') + '/' + gstin;
+    } else {
+      url = (cfg.customUrl || '').replace('{gstin}', gstin).replace('{key}', encodeURIComponent(cfg.key || ''));
+    }
+    if (!url) return Promise.resolve({ status: C.STATUS.UNKNOWN, verified: false, error: 'No endpoint configured' });
+    if (cfg.proxyBase) {
+      url = cfg.proxyBase + (cfg.proxyBase.indexOf('?') < 0 ? '?' : '&') +
+            'url=' + encodeURIComponent(url);
+    }
+
+    return fetch(url, { headers: { Accept: 'application/json' } })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      })
+      .then(function (text) {
+        var json;
+        try { json = JSON.parse(text); } catch (e) { json = text; }
+        var status = mapLiveStatus(json);
+        return {
+          status: status,
+          verified: status !== C.STATUS.UNKNOWN,
+          raw: json,
+          error: status === C.STATUS.UNKNOWN ? 'Response did not state a registration status' : null
+        };
+      })
+      .catch(function (err) {
+        return {
+          status: C.STATUS.UNKNOWN, verified: false, raw: null,
+          error: 'Lookup failed: ' + err.message +
+                 (cfg.proxyBase ? '' : ' (a browser cannot call most of these endpoints directly — set a proxy prefix in Settings)')
+        };
+      });
+  }
+
+  // -------------------------------------------------------------------- render
+  var CONFIDENCE = {
+    exact:   { text: 'read directly', tone: 'ok' },
+    rebuilt: { text: 'rebuilt from an OCR slip', tone: 'warn' },
+    bad:     { text: 'check digit fails', tone: 'bad' }
+  };
+
+  function showNumber(candidate, sourceLabel) {
+    var d = C.decode(candidate.gstin);
+    state.decoded = d;
+
+    $('gstinText').textContent = d.formatted || d.gstin;
+
+    var kind = candidate.exact ? 'exact' : (d.checksumOk ? 'rebuilt' : 'bad');
+    var c = CONFIDENCE[kind];
+    var chip = $('confidenceChip');
+    chip.textContent = c.text;
+    chip.setAttribute('data-tone', c.tone);
+
+    // facts
+    var facts = $('facts');
+    facts.innerHTML = '';
+    [['State', d.stateName ? d.stateName + ' (' + d.stateCode + ')' : '—'],
+     ['PAN', d.pan || '—', true],
+     ['Registered as', d.panEntity || '—'],
+     ['Name begins with', d.nameInitial || '—'],
+     ['Registration no.', d.entityNumber || '—'],
+     ['Check digit', (d.checksumOk ? 'valid' : 'expected ' + d.checkDigitExpected)]
+    ].forEach(function (row) {
+      var dt = document.createElement('dt'); dt.textContent = row[0];
+      var dd = document.createElement('dd'); dd.textContent = row[1];
+      if (row[2]) dd.className = 'mono';
+      facts.appendChild(dt); facts.appendChild(dd);
+    });
+    // A stable node, not an append per scan — appending leaked a copy of this
+    // paragraph on every GSTIN the user checked.
+    var legend = $('factsLegend');
+    legend.textContent = 'The PAN and the first letter of the registered name are encoded in the number itself, ' +
+      'so they can be cross-checked against the name printed on the bill.';
+    legend.hidden = false;
+
+    // issues
+    var box = $('issues');
+    box.innerHTML = '';
+    d.issues.forEach(function (issue) {
+      var p = document.createElement('p');
+      p.className = 'note';
+      p.style.color = issue.level === 'error' ? 'var(--bad)' : 'var(--muted)';
+      p.textContent = (issue.level === 'error' ? '✕ ' : '△ ') + issue.message;
+      box.appendChild(p);
+    });
+
+    // checksum repair offer
+    var rb = $('repairBox');
+    rb.innerHTML = '';
+    if (!d.checksumOk) {
+      var r = C.repairChecksum(d.gstin);
+      if (r.best && r.best !== d.gstin) {
+        var p = document.createElement('p');
+        p.className = 'note';
+        p.textContent = 'One character may have been misread. If it was, the number is ' + C.format(r.best) + '.';
+        rb.appendChild(p);
+        rb.appendChild(btn('Use ' + r.best, 'btn', function () {
+          showNumber({ gstin: r.best, exact: false, checksumOk: true }, sourceLabel);
+        }));
+      } else {
+        var p2 = document.createElement('p');
+        p2.className = 'note';
+        p2.textContent = 'No single misread character explains this number. Ask for a correctly printed bill — a GSTIN whose check digit fails is not a valid registration number.';
+        rb.appendChild(p2);
+      }
+      rb.hidden = false;
+    } else { rb.hidden = true; }
+
+    $('result').hidden = false;
+    refresh();
+    remember({
+      gstin: d.gstin, at: Date.now(),
+      level: ($('verdictCard').getAttribute('data-level') || 'unknown'),
+      state: d.stateName
+    });
+  }
+
+  /** Offer a picker when the image yielded more than one plausible number. */
+  function showCandidates(list) {
+    var box = transientPanel();
+    var h = document.createElement('h2');
+    h.textContent = list.length + ' numbers found on this bill';
+    box.appendChild(h);
+
+    var ul = document.createElement('ul');
+    ul.className = 'candidates';
+    list.slice(0, 6).forEach(function (c) {
+      var d = C.decode(c.gstin);
+      var li = document.createElement('li');
+      var b = document.createElement('button');
+      b.type = 'button';
+      var left = document.createElement('span');
+      left.className = 'g'; left.textContent = d.formatted;
+      var meta = document.createElement('span');
+      meta.className = 'm';
+      meta.textContent = d.stateName + (c.checksumOk ? ' · valid' : ' · check digit fails');
+      b.appendChild(left); b.appendChild(meta);
+      b.addEventListener('click', function () { showNumber(c, 'picked'); box.remove(); });
+      li.appendChild(b); ul.appendChild(li);
+    });
+    box.appendChild(ul);
+  }
+
+  // ---------------------------------------------------------------------- OCR
+  var workerPromise = null;
+  function getWorker(onProgress) {
+    if (!workerPromise) {
+      if (!window.Tesseract) return Promise.reject(new Error('The OCR library did not load — check your connection and reload.'));
+      workerPromise = Tesseract.createWorker('eng', 1, {
+        logger: function (m) { if (onProgress) onProgress(m); }
+      });
+    }
+    return workerPromise;
+  }
+
+  var stepState = { load: 'active', ocr: '', find: '', verify: '' };
+  function paintSteps() {
+    Object.keys(stepState).forEach(function (k) {
+      var el = document.querySelector('[data-step=' + k + ']');
+      if (el) el.setAttribute('data-state', stepState[k] || '');
+    });
+  }
+  function setProgress(p) {
+    $('barFill').style.width = Math.round(Math.max(0, Math.min(1, p)) * 100) + '%';
+  }
+
+  /** Downscale, grey out, and stretch contrast — Tesseract likes ~1800px of that. */
+  function preprocess(img, mode) {
+    var canvas = $('work');
+    var max = 1800;
+    var scale = Math.min(1, max / Math.max(img.width, img.height));
+    var w = Math.max(1, Math.round(img.width * scale));
+    var h = Math.max(1, Math.round(img.height * scale));
+    canvas.width = w; canvas.height = h;
+    var ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, w, h);
+
+    var data = ctx.getImageData(0, 0, w, h);
+    window.ImagePrep.enhance(data.data, mode);
+    ctx.putImageData(data, 0, 0);
+    return canvas;
+  }
+
+  function blobToImage(blob) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(blob);
+      var img = new Image();
+      img.onload = function () { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('Could not read that image')); };
+      img.src = url;
+    });
+  }
+
+  function recogniseText(canvas, onProgress) {
+    return getWorker(onProgress).then(function (w) {
+      return w.recognize(canvas).then(function (res) { return res.data.text || ''; });
+    });
+  }
+
+  function handleImage(blob) {
+    $('progressPanel').hidden = false;
+    $('result').hidden = true;
+    Array.prototype.forEach.call(document.querySelectorAll('.js-transient'), function (n) { n.remove(); });
+    stepState = { load: 'active', ocr: '', find: '', verify: '' };
+    paintSteps(); setProgress(0.05);
+    $('progressPanel').scrollIntoView({ block: 'nearest' });
+
+    blobToImage(blob).then(function (img) {
+      stepState.load = 'done'; stepState.ocr = 'active'; paintSteps();
+
+      var plain = preprocess(img, 'contrast');
+      return recogniseText(plain, function (m) {
+        if (m.status === 'recognizing text') setProgress(0.1 + m.progress * 0.7);
+      }).then(function (text) {
+        var found = C.extract(text);
+        if (found.length) return { text: text, found: found };
+        // Second pass: hard binarisation rescues low-contrast thermal paper.
+        stepState.ocr = 'active'; paintSteps();
+        var binary = preprocess(img, 'binary');
+        return recogniseText(binary, function (m) {
+          if (m.status === 'recognizing text') setProgress(0.1 + m.progress * 0.7);
+        }).then(function (text2) {
+          var merged = text + '\n' + text2;
+          return { text: merged, found: C.extract(merged) };
+        });
+      });
+    }).then(function (out) {
+      setProgress(1);
+      stepState.ocr = 'done'; stepState.find = 'done'; stepState.verify = 'done'; paintSteps();
+      state.ocrText = out.text;
+      state.candidates = out.found;
+      $('ocrText').textContent = out.text.trim() || '(nothing was read)';
+      $('ocrBox').hidden = false;
+
+      var bill = BP.parseBill(out.text);
+      state.bill = bill;
+      applyBill(bill);
+
+      setTimeout(function () { $('progressPanel').hidden = true; }, 500);
+
+      if (!out.found.length) {
+        $('result').hidden = true;
+        var box = transientPanel();
+        box.innerHTML = '<h2>No GSTIN found</h2>' +
+          '<p class="note">There may be no GSTIN on this bill — small shops and dhaba operators below the ' +
+          'registration threshold are not required to have one. If a number is printed, type it in above. ' +
+          'The box below is everything the scanner could read.</p>';
+        var pre = document.createElement('pre');
+        pre.className = 'raw';
+        pre.textContent = out.text.trim().slice(0, 4000) || '(nothing was read)';
+        box.appendChild(pre);
+        var close = btn('Dismiss', 'btn', function () { box.remove(); });
+        close.style.marginTop = '.7rem';
+        box.appendChild(close);
+        toast('No GSTIN found in that photo');
+        return;
+      }
+
+      if (out.found.length === 1 || out.found[0].score - out.found[1].score > 25) {
+        showNumber(out.found[0], 'ocr');
+      } else {
+        showNumber(out.found[0], 'ocr');
+        toast('More than one number found — check the picker');
+        showCandidates(out.found);
+      }
+    }).catch(function (err) {
+      $('progressPanel').hidden = true;
+      toast(err.message || 'Something went wrong reading that image');
+    });
+  }
+
+  function applyBill(bill) {
+    $('taxCharged').checked = !!bill.taxCharged;
+    if (bill.taxableValue != null) $('taxableValue').value = bill.taxableValue;
+    if (bill.taxAmount) $('taxAmount').value = bill.taxAmount;
+
+    var table = $('evidenceTable');
+    table.innerHTML = '';
+    if (bill.evidence.length) {
+      bill.evidence.forEach(function (e) {
+        var tr = document.createElement('tr');
+        var a = document.createElement('td'); a.textContent = e.field;
+        var b = document.createElement('td'); b.textContent = e.line;
+        var c = document.createElement('td'); c.textContent = '₹' + C.money(e.value);
+        tr.appendChild(a); tr.appendChild(b); tr.appendChild(c);
+        table.appendChild(tr);
+      });
+      $('evidenceBox').hidden = false;
+    } else {
+      $('evidenceBox').hidden = true;
+    }
+  }
+
+  function billFromInputs() {
+    var b = state.bill || {};
+    b.taxCharged = $('taxCharged').checked;
+    b.taxableValue = parseFloat($('taxableValue').value);
+    b.taxAmount = parseFloat($('taxAmount').value);
+    if (!isFinite(b.taxableValue)) b.taxableValue = null;
+    if (!isFinite(b.taxAmount)) b.taxAmount = 0;
+    state.bill = b;
+    return b;
+  }
+
+  // ------------------------------------------------------------------- typing
+  function typeCheck() {
+    var raw = $('gstinInput').value;
+    var s = C.normalize(raw);
+    var hint = $('typeHint');
+    if (s.length < 2) { hint.hidden = true; return; }
+    if (s.length !== 15) {
+      hint.hidden = false;
+      hint.textContent = s.length + ' of 15 characters.';
+      return;
+    }
+    var d = C.decode(s);
+    if (d.valid) {
+      hint.hidden = false;
+      hint.style.color = 'var(--ok)';
+      hint.textContent = 'Valid number — ' + d.stateName + '. Press Enter to check it.';
+      return;
+    }
+    hint.hidden = false;
+    hint.style.color = 'var(--bad)';
+    hint.textContent = d.issues.length ? d.issues[0].message : 'Not a valid GSTIN.';
+  }
+
+  function submitTyped() {
+    var s = C.normalize($('gstinInput').value);
+    if (s.length < 15) { toast('A GSTIN is 15 characters'); return; }
+    // Only overwrite the bill figures when there is a scanned bill behind them.
+    // Typing a number by hand must not wipe amounts the user just entered.
+    if (state.ocrText) {
+      var bill = BP.parseBill(state.ocrText);
+      state.bill = bill;
+      applyBill(bill);
+    }
+    showNumber({ gstin: s, exact: true, checksumOk: C.checksumOk(s) }, 'typed');
+    $('result').scrollIntoView({ block: 'start' });
+  }
+
+  // -------------------------------------------------------------------- wiring
+  $('cameraBtn').addEventListener('click', function () { $('cameraInput').click(); });
+  $('photoBtn').addEventListener('click', function () { $('photoInput').click(); });
+  ['cameraInput', 'photoInput'].forEach(function (id) {
+    $(id).addEventListener('change', function (e) {
+      var f = e.target.files && e.target.files[0];
+      if (f) handleImage(f);
+      e.target.value = '';
+    });
+  });
+
+  $('gstinInput').addEventListener('input', typeCheck);
+  $('gstinInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') submitTyped(); });
+
+  ['taxCharged', 'taxableValue', 'taxAmount'].forEach(function (id) {
+    $(id).addEventListener('input', function () { billFromInputs(); refresh(); });
+    $(id).addEventListener('change', function () { billFromInputs(); refresh(); });
+  });
+
+  // history dialog
+  $('historyBtn').addEventListener('click', function () {
+    var list = $('histList');
+    list.innerHTML = '';
+    var h = history();
+    $('histEmpty').hidden = h.length > 0;
+    h.forEach(function (e) {
+      var li = document.createElement('li');
+      var b = document.createElement('button');
+      b.type = 'button';
+      var g = document.createElement('span'); g.className = 'g'; g.textContent = C.format(e.gstin);
+      var w = document.createElement('span'); w.className = 'w';
+      w.textContent = new Date(e.at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+      var d = document.createElement('span'); d.className = 'd';
+      d.textContent = (e.level === 'illegal' ? 'GST not collectible' : e.level === 'ok' ? 'Fine' : 'Unverified') +
+                      (e.state ? ' · ' + e.state : '');
+      b.appendChild(g); b.appendChild(w); b.appendChild(d);
+      b.addEventListener('click', function () {
+        $('gstinInput').value = e.gstin;
+        showNumber({ gstin: e.gstin, exact: true, checksumOk: C.checksumOk(e.gstin) }, 'history');
+        $('historyDlg').close();
+        $('result').scrollIntoView({ block: 'start' });
+      });
+      li.appendChild(b); list.appendChild(li);
+    });
+    $('historyDlg').showModal();
+  });
+  $('clearHistory').addEventListener('click', function () {
+    try { localStorage.removeItem('gstinCheck.history'); } catch (e) {}
+    $('histList').innerHTML = '';
+    $('histEmpty').hidden = false;
+    toast('History cleared');
+  });
+
+  // settings dialog
+  function fillSettings() {
+    var s = loadSettings();
+    $('providerMode').value = s.mode;
+    $('apiKey').value = s.key || '';
+    $('customUrl').value = s.customUrl || '';
+    $('proxyBase').value = s.proxyBase || '';
+    syncSettingsFields();
+  }
+  function syncSettingsFields() {
+    var m = $('providerMode').value;
+    $('gstincheckFields').hidden = m !== 'gstincheck' && m !== 'custom';
+    $('customFields').hidden = m !== 'custom';
+  }
+  $('settingsBtn').addEventListener('click', function () { fillSettings(); $('settingsDlg').showModal(); });
+  $('providerMode').addEventListener('change', syncSettingsFields);
+  $('saveSettings').addEventListener('click', function () {
+    var s = {
+      mode: $('providerMode').value,
+      key: $('apiKey').value.trim(),
+      customUrl: $('customUrl').value.trim(),
+      proxyBase: $('proxyBase').value.trim()
+    };
+    saveSettings(s);
+    state.provider = s;
+    state.live = null;
+    $('settingsDlg').close();
+    toast(s.mode === 'offline' ? 'Offline mode' : 'Lookup endpoint saved');
+    if (state.decoded) refresh();
+  });
+
+  document.querySelectorAll('[data-close]').forEach(function (b) {
+    b.addEventListener('click', function () { b.closest('dialog').close(); });
+  });
+
+  // --------------------------------------------------------------------- boot
+  state.provider = loadSettings();
+  fillSettings();
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  }
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,25 @@
+# Header rules for Cloudflare Pages and Netlify (same `_headers` syntax).
+#
+# The one rule that actually matters is /sw.js. A service worker served from a
+# stale HTTP cache can never be replaced, so a released fix would never reach an
+# installed client. Everything else is taste.
+
+/sw.js
+  Cache-Control: no-cache
+  Service-Worker-Allowed: /
+
+/manifest.webmanifest
+  # A wrong content type silently suppresses the install prompt.
+  Content-Type: application/manifest+json
+  Cache-Control: public, max-age=3600
+
+/index.html
+  Cache-Control: no-cache
+
+/icons/*
+  Cache-Control: public, max-age=86400
+
+# The app shell is versioned by the service worker, not by HTTP caching, so keep
+# the HTTP lifetime short and let the SW decide.
+/*.js
+  Cache-Control: public, max-age=300

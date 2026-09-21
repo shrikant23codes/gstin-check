@@ -1,0 +1,30 @@
+# --- local-only audit terms -------------------------------------------------
+# Holds the identifiers that must never appear in a commit. Read by
+# tools/privacy_audit.py --forbid-file. Deliberately ignored by git: the scanner
+# must not name the person it is protecting, and this file must never ship.
+.privacy-terms
+
+# --- OS / editor noise -----------------------------------------------------
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+
+# --- dependencies ----------------------------------------------------------
+# The project itself has no runtime dependencies; this exists so a stray
+# `npm install` never ends up in a commit.
+node_modules/
+package-lock.json
+
+# --- python ----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# --- scratch ---------------------------------------------------------------
+*.log
+/tmp/
+/out/

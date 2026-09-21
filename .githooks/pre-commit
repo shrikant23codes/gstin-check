@@ -1,0 +1,50 @@
+#!/bin/sh
+# Pre-commit gate: refuse to create a commit that contains an identifier, secret,
+# home path, IP, cookie or key.
+#
+# Installed by setting `core.hooksPath` to this directory, so it cannot be
+# bypassed by forgetting to run a script. Deliberately fails CLOSED: if the audit
+# cannot run, the commit is refused rather than allowed silently.
+#
+#   git config core.hooksPath .githooks
+#
+# Emergency bypass (use with intent, fix immediately after):
+#   git commit --no-verify
+
+set -e
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+if [ ! -f tools/privacy_audit.py ]; then
+  echo "pre-commit: tools/privacy_audit.py is missing; refusing to commit" >&2
+  exit 1
+fi
+
+py=""
+for candidate in python3 python; do
+  if command -v "$candidate" >/dev/null 2>&1; then py="$candidate"; break; fi
+done
+
+if [ -z "$py" ]; then
+  echo "pre-commit: no python interpreter found, cannot run the privacy audit" >&2
+  echo "pre-commit: refusing to commit (override with --no-verify if you must)" >&2
+  exit 1
+fi
+
+terms=""
+if [ -f .privacy-terms ]; then
+  terms="--forbid-file .privacy-terms"
+else
+  # No term file is a weaker check but not a reason to block by itself.
+  echo "pre-commit: note: no .privacy-terms file, checking generic patterns only"
+fi
+
+if ! "$py" tools/privacy_audit.py --root . --fail-on medium $terms; then
+  echo "" >&2
+  echo "pre-commit: BLOCKED by the privacy audit." >&2
+  echo "pre-commit: fix the findings above, or re-run with --fail-on high to triage." >&2
+  exit 1
+fi
+
+exit 0

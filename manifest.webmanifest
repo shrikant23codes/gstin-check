@@ -1,0 +1,19 @@
+{
+  "name": "GSTIN Check — is this bill's GST collectible?",
+  "short_name": "GSTIN Check",
+  "description": "Scan the GSTIN off a bill, validate it, and see whether the supplier is legally allowed to collect GST from you.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#faf7f1",
+  "theme_color": "#16130f",
+  "lang": "en-IN",
+  "categories": ["utilities", "finance", "productivity"],
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

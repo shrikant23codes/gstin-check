@@ -1,0 +1,8 @@
+# Kept out of search engines by default.
+#
+# This is a personal utility pointed at a public URL. There is nothing here worth
+# indexing, and staying unindexed means the URL is not casually associated with
+# whoever happens to run it. Remove this file (or flip it to `Allow: /`) if you
+# would rather it be discoverable.
+User-agent: *
+Disallow: /
