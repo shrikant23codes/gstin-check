@@ -94,10 +94,6 @@ verified"* every time. Restoring it without a network call means letting the use
 the status they just read on the portal, which keeps every source captcha-gated while
 bringing back the refusal amount and the complaint flow. That is not built yet.
 
-`server.go` still contains the allow-listed lookup relay (`-allow-host`) that used to
-back the removed settings. It is inert — nothing calls it — and kept only in case the
-relay is wanted again.
-
 ---
 
 ## Tests
@@ -243,7 +239,7 @@ bill-parse.js            reads taxable value / CGST / SGST / total off bill text
 image-prep.js            contrast stretch + Otsu binarisation (no DOM)
 sw.js                    service worker: app shell + OCR assets cached offline
 manifest.webmanifest     PWA manifest
-server.go                static server; also carries the now-unused lookup relay
+server.go                static file server for local dev and HTTPS device testing
 _headers                 cache-control and content-type rules for Pages/Netlify
 robots.txt               keeps the deployed site out of search engines
 icons/                   app icons
