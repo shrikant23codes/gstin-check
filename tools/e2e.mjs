@@ -10,8 +10,6 @@
  *   - the typed-GSTIN path renders a verdict
  *   - a bill photo fed into the real file input goes through OCR, extraction,
  *     bill parsing and the verdict engine, and comes out the other side
- *   - the lookup path through the configured endpoint flips the verdict to
- *     "not collectible" for a composition dealer that charged GST
  *   - the service worker registers
  */
 import { spawn } from 'node:child_process';
@@ -32,9 +30,6 @@ const APP_URL = getFlag('url', 'http://localhost:8788/');
 const HEADED = argv.includes('--headed');
 const DEBUG_PORT = Number(getFlag('port', '9333'));
 const SHOT_DIR = getFlag('shot', null);
-// The lookup section depends on a stub upstream on localhost. Against a
-// deployed URL there is no such stub, so it is opt-out.
-const SKIP_LOOKUP = argv.includes('--skip-lookup');
 
 const CHROME_CANDIDATES = [
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -301,73 +296,6 @@ try {
   check('implied rate computed from the figures', /5%/.test(rate.note), rate.note);
   check('unverified + taxed stays unverified, not illegal', rate.level === 'unknown', rate.level);
 
-  // --------------------------------------- 3. the live lookup flips the verdict
-  // Skipped with --skip-lookup: needs the local stub upstream on :8789.
-  if (!SKIP_LOOKUP) {
-  section('live lookup (through the relay to a stub upstream)');
-  await p.eval(`(() => {
-    document.getElementById('settingsBtn').click();
-    document.getElementById('providerMode').value = 'custom';
-    document.getElementById('providerMode').dispatchEvent(new Event('change', {bubbles:true}));
-    document.getElementById('customUrl').value = 'http://127.0.0.1:8789/gstin/{gstin}';
-    document.getElementById('proxyBase').value = 'http://localhost:8788/api/lookup';
-    document.getElementById('saveSettings').click();
-    return true;
-  })()`);
-  await sleep(400);
-
-  // use the composition GSTIN from the second sample bill
-  await p.eval(`(() => {
-    const el = document.getElementById('gstinInput');
-    el.value = '08AAACR5055K1Z7';
-    el.dispatchEvent(new Event('input', {bubbles:true}));
-    el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true}));
-    return true;
-  })()`);
-  await p.waitFor(`!document.getElementById('result').hidden`, { label: 'result for composition GSTIN' });
-
-  // This bill does add CGST/SGST on top — that is the whole scenario.
-  await p.eval(`(() => {
-    const c = document.getElementById('taxCharged');
-    c.checked = true; c.dispatchEvent(new Event('change', {bubbles:true}));
-    const t = document.getElementById('taxableValue'); t.value = '3400'; t.dispatchEvent(new Event('input', {bubbles:true}));
-    const a = document.getElementById('taxAmount'); a.value = '170'; a.dispatchEvent(new Event('input', {bubbles:true}));
-    return true;
-  })()`);
-
-  await p.waitFor(`!!document.querySelector('#liveBody button')`, { label: 'lookup button' });
-  await p.eval(`(() => {
-    const btns = Array.from(document.querySelectorAll('#liveBody button'));
-    const b = btns.find(x => /Look up status/i.test(x.textContent));
-    b.click(); return true;
-  })()`);
-  await p.waitFor(`document.getElementById('verdictCard').getAttribute('data-level') === 'illegal'`,
-    { label: 'illegal verdict after lookup', timeout: 60000 });
-
-  const illegal = await p.eval(`(() => ({
-    level: document.getElementById('verdictCard').getAttribute('data-level'),
-    headline: document.getElementById('verdictHeadline').textContent,
-    amount: (document.querySelector('#verdictBody .amount')||{}).textContent,
-    body: Array.from(document.querySelectorAll('#verdictBody p')).map(e => e.textContent),
-    legal: Array.from(document.querySelectorAll('#verdictLegal li')).map(e => e.textContent),
-    actions: Array.from(document.querySelectorAll('#verdictActions button')).map(e => e.textContent),
-    raw: document.getElementById('rawResponse').textContent.slice(0, 80)
-  }))()`);
-  check('composition dealer charging GST -> illegal', illegal.level === 'illegal', illegal.level);
-  check('headline says refuse it', /not collectible/i.test(illegal.headline), illegal.headline);
-  check('the uncollectible amount is shown', /170/.test(illegal.amount || ''), illegal.amount);
-  check('cites Section 10(4)', illegal.legal.some((l) => /Section 10\(4\)/.test(l)), illegal.legal);
-  check('offers a complaint action', illegal.actions.some((a) => /complaint/i.test(a)), illegal.actions);
-  check('shows the raw upstream response', illegal.raw.length > 10, illegal.raw);
-  await shoot(p, '02-illegal-light');
-  await p.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }] });
-  await sleep(500);
-  await shoot(p, '03-illegal-dark');
-  await p.send('Emulation.setEmulatedMedia', { features: [] });
-  await sleep(300);
-
-  }
-
   // ------------------------------------------------ 4. OCR from a real photo
   section('OCR from a photographed bill');
   await p.eval(`(() => { document.getElementById('result').hidden = true; return true; })()`);
@@ -410,7 +338,7 @@ try {
   check('shows which line each figure came from', scanned.evidence.length >= 3, scanned.evidence.length);
 
   // ------------------------------- 5. the composition bill photo end to end
-  section('OCR of a composition dealer bill, then lookup');
+  section('OCR of a composition dealer bill');
   const compPath = path.join(ROOT, 'sample-bills', 'composition-photo.jpg');
   const node2 = await p.send('DOM.querySelector', { nodeId: doc.root.nodeId, selector: '#photoInput' });
   await p.send('DOM.setFileInputFiles', { nodeId: node2.nodeId, files: [compPath] });

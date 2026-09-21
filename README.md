@@ -40,10 +40,11 @@ lawfully doesn't prove it was *remitted*; only the portal shows that much.)
 | **Validate** | **Luhn mod 36** check digit — the same algorithm GSTN uses. A wrong digit means either a misread character or a number that was made up. |
 | **Decode** | State code → state, embedded PAN, constitution of the business (from the PAN's 4th character), registration count, and the first letter of the registered name. |
 | **Read the money** | Taxable value, CGST/SGST/IGST and the total, each with the exact line it came from. Figures stay editable. |
-| **Judge** | Status × whether the bill charged tax → *fine* / *right amounts, wrong document* / **not collectible, refuse it**. |
-| **Act** | Copy the summary, or file a complaint on the GST grievance portal. |
+| **Judge** | The verdict engine applies Section 10(4): a composition or suspended supplier may not collect tax at all, so a bill that adds it anyway is flagged with the amount that should not have been charged. Needs a known status — see the section below. |
+| **Act** | Copy a plain-text summary, or open the official GSTIN search in your own browser. |
 
-Everything runs on the device. Nothing is uploaded anywhere.
+Bill photos and GSTINs never leave the device. The only network requests the app
+makes are its OCR library and web fonts loading from a CDN.
 
 ---
 
@@ -68,41 +69,34 @@ dependencies, no bundler.
 
 ---
 
-## About the live status lookup — read this
+## Why there is no live status lookup
 
-The one thing this app cannot do by itself is fetch a supplier's **registration
-status**, because:
+The one thing this app cannot do is fetch a supplier's **registration status**. That
+is deliberate, not an oversight — every source for it is gated:
 
-- **gst.gov.in is behind a bot check.** Its search is not a public API and cannot be
-  queried by any script, this one included. This app deliberately does not try to
-  defeat that. The **Check on GST portal** button copies the number and opens the
-  official page for you to paste it into.
-- **Commercial GSTIN APIs are CORS-locked**, so a page served from another origin
-  can't call them directly either.
-
-So there are three modes, in **Settings**:
-
-| Mode | What it does |
+| Source | What it does when asked |
 |---|---|
-| **Offline only** *(default)* | Structure, check digit, and everything decodable from the number. No network at all. |
-| **API key** | Calls `sheet.gstincheck.co.in/check/<key>/<gstin>` (GSTINCheck's free tier). |
-| **My own endpoint** | A URL template with `{gstin}` / `{key}`, plus an optional **proxy prefix**. |
+| **gst.gov.in** (the authoritative one) | Its search API sits behind an Akamai bot check. A scripted `POST` is dropped at the TCP layer — `Recv failure: Connection reset by peer` — before any application code runs. The captcha is *downstream* of that gate, so it is not even the binding constraint. |
+| **ClearTax** | `GET /f/compliance-report/{gstin}/?captcha_token=…` returns `401 {"detail":"reCaptcha verification failed"}` for absent, empty **and** dummy tokens. Google reCAPTCHA, verified server-side, plus an 11-request rate limit and no CORS grant to third-party origins. |
+| **Commercial GSTIN APIs** | Key-gated and CORS-locked, so a page served from another origin cannot call them either. |
 
-The proxy prefix is what solves CORS: `server.go` exposes `/api/lookup?url=…`, which
-forwards server-side and adds the CORS headers a browser needs.
+Rather than special-case one of these, or pretend a check digit settles the question,
+the app does the one thing that genuinely works: **Check on GST portal** copies the
+number and opens the official Search-by-GSTIN/UIN page in your own browser, where you
+solve the captcha yourself. A GSTIN that passes its check digit can still belong to a
+composition dealer — only the portal settles that.
 
-```bash
-go run server.go -allow-host sheet.gstincheck.co.in
-```
+**The honest consequence:** the stamped verdict — *"this GST is not collectible,
+refuse it"* — cannot be reached from the UI as shipped. `gstin-core.js` still
+implements and unit-tests that branch, so the logic is correct and present, but with
+the status permanently unverified the app reports *"Registration status not yet
+verified"* every time. Restoring it without a network call means letting the user pick
+the status they just read on the portal, which keeps every source captcha-gated while
+bringing back the refusal amount and the complaint flow. That is not built yet.
 
-It is **not an open proxy** — without `-allow-host` the relay refuses everything, and
-with it, only the hosts you name are ever forwarded to. Point the app's proxy prefix
-at `http://localhost:8788/api/lookup`.
-
-Whatever comes back is parsed tolerantly (providers name the field differently), and
-the **raw response is always shown** so you can check the mapping yourself. Values
-from a third-party API are a hint, not proof. The GST portal is the only source that
-counts.
+`server.go` still contains the allow-listed lookup relay (`-allow-host`) that used to
+back the removed settings. It is inert — nothing calls it — and kept only in case the
+relay is wanted again.
 
 ---
 
@@ -118,9 +112,8 @@ repair, bill parsing, image preprocessing and the verdict matrix.
 
 The e2e test drives the actual app over the DevTools Protocol with no npm
 dependencies — boots it, types a GSTIN, scans two real bill photos through the real
-file input, runs a lookup through the relay to a stub upstream, and asserts the
-verdict flips to *not collectible*. It also checks that repeated scans don't
-accumulate DOM nodes.
+file input, and checks the OCR pipeline end to end. It also asserts that repeated
+scans don't accumulate DOM nodes.
 
 ```bash
 node tools/e2e.mjs --headed --shot /tmp/shots    # watch it, and save screenshots
@@ -148,7 +141,6 @@ printer:
 ```bash
 uv run --with pillow python tools/make_sample_bill.py
 uv run --with pillow python tools/make_icons.py
-python3 tools/stub_lookup.py 8789          # fake upstream, for testing lookups
 ```
 
 ---
@@ -205,11 +197,11 @@ forces `sw.js` to `no-cache` and pins the manifest content type, which is what m
 updates and the install prompt actually work. `robots.txt` keeps the site out of
 search engines by default — flip it if you would rather it be discoverable.
 
-**Testing a deployed target.** The e2e harness asserts against a stub upstream on
-`localhost`, which will not exist in production, so skip that section:
+**Testing a deployed target.** The harness takes an explicit URL and has no
+local-only dependencies, so it runs against a live deploy as-is:
 
 ```bash
-node tools/e2e.mjs --url https://your-deploy.example.com --skip-lookup
+node tools/e2e.mjs --url https://your-deploy.example.com
 ```
 
 Two things still have to be checked by hand on a real phone over HTTPS: the camera,
@@ -227,9 +219,10 @@ not as facts about a business.
 
 - **A valid check digit is not a valid registration.** It proves the number wasn't
   mistyped. It says nothing about whether the taxpayer exists, is active, or is a
-  composition dealer. Only a live lookup does that.
-- **Status is unverified by default**, and the verdict says so. It will not accuse a
-  supplier of an illegal collection on the strength of a check digit.
+  composition dealer, and the app has no way to find out for you.
+- **Status is always unverified.** Every source for it is captcha-gated, so the app
+  opens the official portal instead of guessing. It will not accuse a supplier of an
+  illegal collection on the strength of a check digit.
 - **OCR is good, not perfect.** The app prefers to report that it found nothing over
   guessing — and when it rebuilds a number from a misread character it says so, and
   shows you the repaired version before you rely on it.
@@ -250,7 +243,7 @@ bill-parse.js            reads taxable value / CGST / SGST / total off bill text
 image-prep.js            contrast stretch + Otsu binarisation (no DOM)
 sw.js                    service worker: app shell + OCR assets cached offline
 manifest.webmanifest     PWA manifest
-server.go                static server + optional CORS/allow-listed lookup relay
+server.go                static server; also carries the now-unused lookup relay
 _headers                 cache-control and content-type rules for Pages/Netlify
 robots.txt               keeps the deployed site out of search engines
 icons/                   app icons
@@ -260,7 +253,8 @@ tools/privacy_audit.py   pre-commit scan for identifiers and secrets
 tools/bump_version.mjs   bumps the sw.js cache version (the release lever)
 tools/crosscheck.mjs     check-digit cross-check against python-stdnum
 tools/make_sample_bill.py  generates the OCR test fixtures
-tools/stub_lookup.py     fake GSTIN API, for exercising the lookup path
+tools/isolate.py         shows which validation layer rejected a GSTIN
+tools/probe_repair_safety.mjs  checks that OCR repairs are decisive, not a guess
 ```
 
 `.privacy-terms` (gitignored) holds the identifiers the audit forbids.

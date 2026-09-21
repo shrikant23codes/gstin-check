@@ -11,7 +11,6 @@
     "crosscheck": "node tools/crosscheck.mjs",
     "bills": "uv run --with pillow python tools/make_sample_bill.py",
     "icons": "uv run --with pillow python tools/make_icons.py",
-    "stub": "python3 tools/stub_lookup.py 8789",
     "audit": "python3 tools/privacy_audit.py --root . --fail-on medium --forbid-file .privacy-terms",
     "version:check": "node tools/bump_version.mjs --check",
     "version:bump": "node tools/bump_version.mjs"

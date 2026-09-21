@@ -277,12 +277,6 @@ dialog .sheet {
         <circle cx="10" cy="10" r="7.2"/><path d="M10 5.6V10l3 1.8" stroke-linecap="round"/>
       </svg>
     </button>
-    <button class="iconbtn" id="settingsBtn" title="Settings" aria-label="Settings">
-      <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
-        <circle cx="10" cy="10" r="2.6"/>
-        <path d="M10 2.4v2M10 15.6v2M2.4 10h2M15.6 10h2M4.6 4.6l1.4 1.4M14 14l1.4 1.4M15.4 4.6L14 6M6 14l-1.4 1.4" stroke-linecap="round"/>
-      </svg>
-    </button>
   </header>
 
   <!-- ===================== STEP 1: get a GSTIN ===================== -->
@@ -366,10 +360,6 @@ dialog .sheet {
     <section class="panel" aria-labelledby="liveH">
       <h2 id="liveH">4 — Registration status</h2>
       <div id="liveBody"></div>
-      <details id="rawBox" hidden>
-        <summary>Raw response</summary>
-        <pre class="raw" id="rawResponse"></pre>
-      </details>
     </section>
 
     <details id="ocrBox">
@@ -396,53 +386,6 @@ dialog .sheet {
   <p class="empty" id="histEmpty">Nothing yet. Scanned bills are kept on this device only.</p>
 </div></dialog>
 
-<!-- ===================== settings ===================== -->
-<dialog id="settingsDlg"><div class="sheet">
-  <div class="sheet-head">
-    <h2>Settings</h2>
-    <button class="iconbtn" data-close aria-label="Close">✕</button>
-  </div>
-
-  <label class="field" for="providerMode">
-    <span>Registration-status lookup</span>
-    <select id="providerMode">
-      <option value="offline">Offline only — structure + check digit</option>
-      <option value="gstincheck">GSTINCheck free-tier API key</option>
-      <option value="custom">A lookup endpoint of my own</option>
-    </select>
-  </label>
-
-  <div id="gstincheckFields" hidden>
-    <label class="field" for="apiKey">
-      <span>API key (stored on this device)</span>
-      <input type="text" id="apiKey" class="mono" autocomplete="off" spellcheck="false" placeholder="your-key">
-    </label>
-    <p class="note">Used as <code class="mono">sheet.gstincheck.co.in/check/&lt;key&gt;/&lt;gstin&gt;</code>.</p>
-  </div>
-
-  <div id="customFields" hidden>
-    <label class="field" for="customUrl">
-      <span>URL template — <code class="mono">{gstin}</code> and <code class="mono">{key}</code> are substituted</span>
-      <input type="url" id="customUrl" class="mono" autocomplete="off" spellcheck="false"
-             placeholder="https://api.example.com/gstin/{gstin}">
-    </label>
-    <label class="field" for="proxyBase">
-      <span>Optional proxy prefix (needed if the endpoint blocks browsers)</span>
-      <input type="url" id="proxyBase" class="mono" autocomplete="off" spellcheck="false"
-             placeholder="https://your-relay.example.com/api/lookup">
-    </label>
-  </div>
-
-  <p class="note">
-    The GST portal itself is behind a bot check, so it cannot be queried from here — the
-    <b>Check on GST portal</b> button copies the number and opens the official page for you instead.
-    Whatever you enter above never leaves this device except as the lookup request itself. Run the bundled server with <code class="mono">-allow-host</code> to get a relay at <code class="mono">/api/lookup</code>.
-  </p>
-  <div class="row" style="margin-top:1rem">
-    <button class="btn btn-primary" id="saveSettings">Save</button>
-  </div>
-</div></dialog>
-
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <canvas id="work" hidden></canvas>
@@ -466,22 +409,8 @@ dialog .sheet {
     ocrText: '',
     candidates: [],
     decoded: null,
-    bill: null,
-    live: null,
-    provider: null
+    bill: null
   };
-
-  // ------------------------------------------------------------------ settings
-  function loadSettings() {
-    var defaults = { mode: 'offline', key: '', customUrl: '', proxyBase: '' };
-    try {
-      var raw = localStorage.getItem('gstinCheck.settings');
-      return raw ? Object.assign(defaults, JSON.parse(raw)) : defaults;
-    } catch (e) { return defaults; }
-  }
-  function saveSettings(s) {
-    try { localStorage.setItem('gstinCheck.settings', JSON.stringify(s)); } catch (e) {}
-  }
 
   // ------------------------------------------------------------------- history
   function history() {
@@ -523,7 +452,11 @@ dialog .sheet {
     var d = state.decoded;
     if (!d) return;
     var bill = state.bill || {};
-    var live = state.live || { status: C.STATUS.UNKNOWN, verified: false };
+    // Nothing in this app can fetch a registration status: every source for it is
+    // captcha-gated (see the README). The verdict is therefore always reached with
+    // the status unverified, which is exactly the case the engine refuses to draw a
+    // legal conclusion from.
+    var live = { status: C.STATUS.UNKNOWN, verified: false };
 
     var v = C.verdict({
       status: live.status,
@@ -587,7 +520,7 @@ dialog .sheet {
       }));
     }
 
-    renderLive(live, v);
+    renderStatus(v);
     renderRate(bill);
   }
 
@@ -637,114 +570,39 @@ dialog .sheet {
     }
   }
 
-  function renderLive(live, v) {
+  /**
+   * The status section. It exists to be straight about the one thing this app
+   * cannot determine: registration status lives only behind the GST portal's bot
+   * check, so the number is handed to the user's own browser instead.
+   */
+  function renderStatus(v) {
     var host = $('liveBody');
     host.innerHTML = '';
-    var p = document.createElement('p');
-    p.style.margin = '0 0 .6rem';
-    p.style.fontSize = '.9rem';
-
-    var chip = document.createElement('span');
-    chip.className = 'chip';
-    chip.setAttribute('data-tone', v.cannotCollect ? 'bad' : (live.verified ? 'ok' : 'warn'));
-    chip.textContent = live.verified ? v.statusLabel : 'not checked yet';
 
     var row = document.createElement('div');
     row.className = 'gstin-row';
+    var chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.setAttribute('data-tone', 'warn');
+    chip.textContent = 'not checked here';
     row.appendChild(chip);
     host.appendChild(row);
 
-    p.textContent = live.verified
-      ? 'Reported by the lookup endpoint you configured. Confirm on the GST portal before relying on it.'
-      : 'A GSTIN that passes its check digit can still belong to a composition dealer. Only a live lookup settles that — and the GST portal is the only source that counts.';
+    var p = document.createElement('p');
+    p.className = 'note';
     p.style.marginTop = '.6rem';
+    p.textContent = 'A GSTIN that passes its check digit can still belong to a composition dealer. ' +
+      'Only the GST portal settles that, and it cannot be queried by an app — so this opens it for you.';
     host.appendChild(p);
 
     var actions = document.createElement('div');
     actions.className = 'row';
+    actions.style.marginTop = '.75rem';
     actions.appendChild(btn('Check on GST portal', 'btn btn-primary', function () {
       copy(state.decoded.gstin, 'GSTIN copied — paste it into the Search box');
       window.open(GST_PORTAL_SEARCH, '_blank', 'noopener');
     }));
     host.appendChild(actions);
-
-    actions.style.marginTop = '.75rem';
-
-    if (state.provider && state.provider.mode !== 'offline') {
-      var b = btn('Look up status now', 'btn', function () {
-        b.disabled = true; b.textContent = 'Looking up…';
-        lookup(state.decoded.gstin).then(function (res) {
-          state.live = res;
-          if (res.raw) { $('rawResponse').textContent = typeof res.raw === 'string' ? res.raw : JSON.stringify(res.raw, null, 2); $('rawBox').hidden = false; }
-          if (!res.verified) toast(res.error || 'No status returned');
-          refresh();
-        });
-      });
-      host.appendChild(b);
-    }
-  }
-
-  // ------------------------------------------------------------------- lookup
-  function mapLiveStatus(json) {
-    var found = { scheme: null, state: null };
-    (function walk(node) {
-      if (node == null || found.scheme) return;
-      if (typeof node === 'string') {
-        var s = node;
-        if (/composition|composite\s*levy/i.test(s)) found.scheme = C.STATUS.COMPOSITION;
-        else if (/suspend/i.test(s)) found.state = found.state || C.STATUS.SUSPENDED;
-        else if (/cancell?ed|inactive|de-?registered/i.test(s)) found.state = found.state || C.STATUS.CANCELLED;
-        else if (/not\s*(found|exist)|invalid|no\s*record/i.test(s)) found.state = found.state || C.STATUS.INVALID;
-        else if (/^active$|regular|normal\s*taxpayer/i.test(s)) found.state = found.state || C.STATUS.REGULAR;
-        return;
-      }
-      if (typeof node === 'object') {
-        for (var k in node) { if (Object.prototype.hasOwnProperty.call(node, k)) walk(node[k]); }
-      }
-    })(json);
-    return found.scheme || found.state || C.STATUS.UNKNOWN;
-  }
-
-  function lookup(gstin) {
-    var cfg = loadSettings();
-    if (cfg.mode === 'offline') {
-      return Promise.resolve({ status: C.STATUS.UNKNOWN, verified: false, error: 'Offline mode' });
-    }
-    var url;
-    if (cfg.mode === 'gstincheck') {
-      url = 'https://sheet.gstincheck.co.in/check/' + encodeURIComponent(cfg.key || '') + '/' + gstin;
-    } else {
-      url = (cfg.customUrl || '').replace('{gstin}', gstin).replace('{key}', encodeURIComponent(cfg.key || ''));
-    }
-    if (!url) return Promise.resolve({ status: C.STATUS.UNKNOWN, verified: false, error: 'No endpoint configured' });
-    if (cfg.proxyBase) {
-      url = cfg.proxyBase + (cfg.proxyBase.indexOf('?') < 0 ? '?' : '&') +
-            'url=' + encodeURIComponent(url);
-    }
-
-    return fetch(url, { headers: { Accept: 'application/json' } })
-      .then(function (r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.text();
-      })
-      .then(function (text) {
-        var json;
-        try { json = JSON.parse(text); } catch (e) { json = text; }
-        var status = mapLiveStatus(json);
-        return {
-          status: status,
-          verified: status !== C.STATUS.UNKNOWN,
-          raw: json,
-          error: status === C.STATUS.UNKNOWN ? 'Response did not state a registration status' : null
-        };
-      })
-      .catch(function (err) {
-        return {
-          status: C.STATUS.UNKNOWN, verified: false, raw: null,
-          error: 'Lookup failed: ' + err.message +
-                 (cfg.proxyBase ? '' : ' (a browser cannot call most of these endpoints directly — set a proxy prefix in Settings)')
-        };
-      });
   }
 
   // -------------------------------------------------------------------- render
@@ -1107,44 +965,11 @@ dialog .sheet {
     toast('History cleared');
   });
 
-  // settings dialog
-  function fillSettings() {
-    var s = loadSettings();
-    $('providerMode').value = s.mode;
-    $('apiKey').value = s.key || '';
-    $('customUrl').value = s.customUrl || '';
-    $('proxyBase').value = s.proxyBase || '';
-    syncSettingsFields();
-  }
-  function syncSettingsFields() {
-    var m = $('providerMode').value;
-    $('gstincheckFields').hidden = m !== 'gstincheck' && m !== 'custom';
-    $('customFields').hidden = m !== 'custom';
-  }
-  $('settingsBtn').addEventListener('click', function () { fillSettings(); $('settingsDlg').showModal(); });
-  $('providerMode').addEventListener('change', syncSettingsFields);
-  $('saveSettings').addEventListener('click', function () {
-    var s = {
-      mode: $('providerMode').value,
-      key: $('apiKey').value.trim(),
-      customUrl: $('customUrl').value.trim(),
-      proxyBase: $('proxyBase').value.trim()
-    };
-    saveSettings(s);
-    state.provider = s;
-    state.live = null;
-    $('settingsDlg').close();
-    toast(s.mode === 'offline' ? 'Offline mode' : 'Lookup endpoint saved');
-    if (state.decoded) refresh();
-  });
-
   document.querySelectorAll('[data-close]').forEach(function (b) {
     b.addEventListener('click', function () { b.closest('dialog').close(); });
   });
 
   // --------------------------------------------------------------------- boot
-  state.provider = loadSettings();
-  fillSettings();
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(function () {});
   }
