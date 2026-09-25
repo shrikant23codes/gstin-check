@@ -5,6 +5,9 @@
   "description": "PWA that reads a GSTIN off a bill and says whether the supplier may legally collect GST.",
   "scripts": {
     "serve": "go run server.go",
+    "build": "node tools/build.mjs",
+    "build:dry": "node tools/build.mjs --dry-run",
+    "predeploy": "npm run version:check && npm run build",
     "test": "node --test tests/*.test.mjs",
     "e2e": "node tools/e2e.mjs",
     "e2e:headed": "node tools/e2e.mjs --headed",
@@ -13,6 +16,8 @@
     "icons": "uv run --with pillow python tools/make_icons.py",
     "audit": "python3 tools/privacy_audit.py --root . --fail-on medium --forbid-file .privacy-terms",
     "version:check": "node tools/bump_version.mjs --check",
+    "deploy": "npx wrangler pages deploy dist",
+    "deploy:preview": "npx wrangler pages deploy dist --branch preview",
     "version:bump": "node tools/bump_version.mjs"
   },
   "engines": {
