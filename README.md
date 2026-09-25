@@ -230,9 +230,28 @@ not as facts about a business.
 
 ---
 
+## License
+
+MIT — see `LICENSE`. You are free to use, modify, and re-host it, including
+commercially. It ships with no warranty, and it is **not legal or tax advice**.
+
+The code here is original and carries no vendored third-party source. It does lean
+on others at runtime, and credit is due to them:
+
+- **[Tesseract.js](https://github.com/naptha/tesseract.js)** (Apache-2.0) — the OCR
+  engine, loaded from a CDN. The underlying
+  [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) is also Apache-2.0.
+- **Google Fonts** (SIL Open Font License) — the typefaces, loaded from a CDN.
+- **Test tooling only, never shipped:** [Pillow](https://python-pillow.org)
+  (MIT-CMU) generates the fixture bills and icons; [python-stdnum](https://github.com/arthurdejong/python-stdnum)
+  (LGPL-2.1+) cross-checks the check digit.
+
+---
+
 ## Files
 
 ```
+LICENSE                  MIT
 index.html               the app — markup, styles and UI wiring in one file
 gstin-core.js            GSTIN decode, check digit, OCR extraction, verdict engine
 bill-parse.js            reads taxable value / CGST / SGST / total off bill text
