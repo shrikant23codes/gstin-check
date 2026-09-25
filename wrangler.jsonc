@@ -1,0 +1,23 @@
+/**
+ * Cloudflare Workers static-assets config.
+ *
+ * This is an assets-only Worker: there is no `main` script, wrangler just
+ * serves the directory below as a static site.
+ *
+ * The one setting that matters is `assets.directory`. Without it, a bare
+ * `npx wrangler deploy` assumes the project root is the assets directory and
+ * uploads `node_modules` too — which fails with "Asset too large" on
+ * `node_modules/workerd/bin/workerd` (~127 MiB, over the 25 MiB limit).
+ *
+ * Assets are assembled by `npm run build` (tools/build.mjs) into ./dist, so
+ * only the shippable files are ever published. `_headers` and `robots.txt`
+ * are honoured from inside the assets directory.
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gstin-check",
+  "compatibility_date": "2025-09-22",
+  "assets": {
+    "directory": "./dist"
+  }
+}

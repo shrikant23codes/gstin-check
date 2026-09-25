@@ -16,8 +16,8 @@
     "icons": "uv run --with pillow python tools/make_icons.py",
     "audit": "python3 tools/privacy_audit.py --root . --fail-on medium --forbid-file .privacy-terms",
     "version:check": "node tools/bump_version.mjs --check",
-    "deploy": "npx wrangler pages deploy dist",
-    "deploy:preview": "npx wrangler pages deploy dist --branch preview",
+    "deploy": "wrangler deploy",
+    "deploy:preview": "wrangler versions upload",
     "version:bump": "node tools/bump_version.mjs"
   },
   "engines": {
