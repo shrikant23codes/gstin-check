@@ -10,10 +10,11 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const B = require('../bill-parse.js');
 
-// The bill from the post this app came from: 641.90 food + 5% = 674.00.
+// A plain 5% restaurant bill: 641.90 taxable + 16.05 + 16.05 = 674.00. The name
+// and address are fictional, like every fixture in this repo.
 const DHABA = `
-HOTEL JAMMU HIMACHAL DHABA
-Cheerwa, Udaipur
+HIGHWAY DHABA
+Main Road, Maharashtra
 GSTIN : 27AAPFU0939F1ZV
 TAX INVOICE
 ------------------------------------------

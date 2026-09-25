@@ -108,7 +108,7 @@ test('normalize tolerates spaces, dashes and unicode dashes', () => {
 // --- OCR extraction --------------------------------------------------------
 
 test('extract finds a cleanly printed GSTIN and flags label proximity', () => {
-  const got = C.extract('HOTEL JAMMU HIMACHAL DHABA\nGSTIN : 27AAPFU0939F1ZV\nGST 5%');
+  const got = C.extract('HIGHWAY DHABA\nGSTIN : 27AAPFU0939F1ZV\nGST 5%');
   assert.ok(got.length >= 1);
   assert.equal(got[0].gstin, '27AAPFU0939F1ZV');
   assert.equal(got[0].exact, true);

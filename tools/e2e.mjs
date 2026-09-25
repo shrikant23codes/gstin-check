@@ -332,6 +332,10 @@ try {
     ocrHead: (document.getElementById('ocrText').textContent||'').slice(0, 200)
   }))()`);
   check('GSTIN read from the photo', scanned.gstin.replace(/\s/g, '') === '27AAPFU0939F1ZV', scanned.gstin);
+  // Ties the committed image to its generator: a stale fixture, or someone
+  // swapping in a real business name, fails here.
+  check('image carries the fictional fixture name', /HIGHWAY DHABA/i.test(scanned.ocrHead),
+    scanned.ocrHead.slice(0, 48));
   check('reads tax as charged', scanned.taxCharged === true);
   check('reads the taxable value 641.90', Math.abs(parseFloat(scanned.taxable) - 641.9) < 0.01, scanned.taxable);
   check('reads the tax amount 32.10', Math.abs(parseFloat(scanned.tax) - 32.1) < 0.01, scanned.tax);

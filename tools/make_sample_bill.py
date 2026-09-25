@@ -4,6 +4,12 @@ Run:  uv run --with pillow python tools/make_sample_bill.py
 Writes sample-bills/*.png — a clean one (what a good printer produces) and a
 "photo" version (slight rotation, blur, uneven lighting) to exercise the
 scanner's contrast pass rather than its best case.
+
+Every business name and address below is deliberately fictional. Do not replace
+them with real ones: these images are committed, so naming a real business would
+put it in the repo and on the deployed site. Each address is also chosen to match
+the state code embedded in its GSTIN, so a decoded state can be cross-checked
+against what the bill actually says.
 """
 from __future__ import annotations
 
@@ -20,8 +26,8 @@ FONTS = [
 ]
 
 DHABA_LINES = [
-    ("HOTEL JAMMU HIMACHAL DHABA", "center"),
-    ("Cheerwa, Udaipur  |  NH-48", "center"),
+    ("HIGHWAY DHABA", "center"),
+    ("Main Road, Maharashtra", "center"),   # 27 in the GSTIN below
     ("GSTIN : 27AAPFU0939F1ZV", "left"),
     ("TAX INVOICE   Bill No. 1174", "left"),
     ("", ""),
@@ -40,8 +46,8 @@ DHABA_LINES = [
 ]
 
 COMPOSITION_LINES = [
-    ("SHREE BALAJI TRADERS", "center"),
-    ("Main Road, Jaipur", "center"),
+    ("EXAMPLE TRADERS", "center"),
+    ("Main Road, Rajasthan", "center"),     # 08 in the GSTIN below
     ("GSTIN : 08AAACR5055K1Z7", "left"),
     ("BILL OF SUPPLY", "left"),
     ("Composition taxable person,", "left"),
