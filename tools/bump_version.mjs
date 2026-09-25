@@ -39,25 +39,43 @@ if (!m) fail("could not find `var VERSION = '...';` in sw.js");
 const current = m[2];
 
 if (checkOnly) {
-  // Compare against what is committed; useful as a pre-deploy gate.
-  let committed = null;
-  try {
-    committed = execSync(`git show HEAD:sw.js`, {
-      cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']
-    }).match(rx)?.[2] ?? null;
-  } catch {
-    console.log('bump_version: no git history yet, skipping check');
-    process.exit(0);
-  }
+  // Pre-deploy gate: has the cache version moved at all?
+  //
+  // Two legitimate flows, and an earlier version of this check only recognised
+  // the first, which made `npm run predeploy` abort the moment you did the
+  // sensible thing and committed the bump before deploying:
+  //   a) bumped but not yet committed  -> working tree differs from HEAD
+  //   b) bumped and committed          -> HEAD differs from HEAD~1
+  // Pass on either. Fail only when neither moved, which means the deploy would
+  // ship the same cache name and installed clients would never receive it.
+  const at = (rev) => {
+    try {
+      return execSync(`git show ${rev}:sw.js`, {
+        cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']
+      }).match(rx)?.[2] ?? null;
+    } catch { return null; }
+  };
+
+  const committed = at('HEAD');
   if (committed === null) {
-    console.log('bump_version: sw.js not in HEAD, skipping check');
+    console.log('bump_version: no committed sw.js yet, skipping check');
     process.exit(0);
   }
-  if (committed === current) {
-    fail(`sw.js VERSION is unchanged (${current}) since HEAD — bump it before deploying`);
+  if (current !== committed) {
+    console.log(`bump_version: ok, working tree carries an uncommitted bump ${committed} -> ${current}`);
+    process.exit(0);
   }
-  console.log(`bump_version: ok, ${committed} -> ${current}`);
-  process.exit(0);
+  const previous = at('HEAD~1');
+  if (previous === null) {
+    console.log(`bump_version: ok, first commit (${current})`);
+    process.exit(0);
+  }
+  if (committed !== previous) {
+    console.log(`bump_version: ok, head commit bumped ${previous} -> ${committed}`);
+    process.exit(0);
+  }
+  fail(`sw.js VERSION is ${current} in both HEAD and HEAD~1 — bump it before deploying, ` +
+       `or installed clients will keep the old app shell`);
 }
 
 let next;

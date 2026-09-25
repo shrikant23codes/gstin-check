@@ -21,7 +21,9 @@ import re
 import sys
 from pathlib import Path
 
-SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv"}
+# `dist` is assembled build output: scanning it only re-reads copies of files
+# already checked, and doubles the findings for a single real problem.
+SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "out"}
 BINARY_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2",
               ".ttf", ".otf", ".zip", ".gz", ".pdf", ".wasm", ".mp4", ".mp3"}
 TEXT_EXT = {".html", ".js", ".mjs", ".cjs", ".css", ".json", ".webmanifest", ".md",
