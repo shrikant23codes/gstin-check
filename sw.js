@@ -7,7 +7,7 @@
  *            they are cached on first use rather than at install time. After one
  *            scan the app works offline for reading images.
  */
-var VERSION = 'v1';
+var VERSION = 'v2';
 var SHELL_CACHE = 'gstin-check-shell-' + VERSION;
 var VENDOR_CACHE = 'gstin-check-vendor-' + VERSION;
 
@@ -16,6 +16,7 @@ var SHELL = [
   'index.html',
   'gstin-core.js',
   'bill-parse.js',
+  'image-guard.js',
   'image-prep.js',
   'manifest.webmanifest',
   'icons/icon.svg',

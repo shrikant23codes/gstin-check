@@ -293,8 +293,8 @@ dialog .sheet {
         </button>
         <button class="btn" id="photoBtn">Choose photo</button>
       </div>
-      <input type="file" id="cameraInput" accept="image/*" capture="environment" class="sr">
-      <input type="file" id="photoInput" accept="image/*" class="sr">
+      <input type="file" id="cameraInput" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" capture="environment" class="sr">
+      <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" class="sr">
     </div>
     <label class="field" for="gstinInput">
       <span>Or type the 15 characters</span>
@@ -393,12 +393,14 @@ dialog .sheet {
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js"></script>
 <script src="gstin-core.js"></script>
 <script src="bill-parse.js"></script>
+<script src="image-guard.js"></script>
 <script src="image-prep.js"></script>
 <script>
 (function () {
   'use strict';
   var C = window.GstinCore;
   var BP = window.BillParse;
+  var IG = window.ImageGuard;
   var $ = function (id) { return document.getElementById(id); };
 
   var GST_PORTAL_SEARCH = 'https://services.gst.gov.in/services/searchtp';
@@ -764,13 +766,81 @@ dialog .sheet {
     });
   }
 
+  function closeSource(src) {
+    if (src && typeof src.close === 'function') { try { src.close(); } catch (e) {} }
+  }
+
+  /** The first slice of the file — enough to sniff the header and read dimensions. */
+  function readHead(file) {
+    var slice = file.slice(0, IG.HEAD_BYTES);
+    if (slice.arrayBuffer) return slice.arrayBuffer().then(function (b) { return new Uint8Array(b); });
+    return new Promise(function (resolve, reject) {
+      var r = new FileReader();
+      r.onload = function () { resolve(new Uint8Array(r.result)); };
+      r.onerror = function () { reject(new Error('Could not read that file')); };
+      r.readAsArrayBuffer(slice);
+    });
+  }
+
+  function bitmapOptions(guard) {
+    var o = IG.decodeTarget(guard.width, guard.height);
+    o.resizeQuality = 'high';
+    return o;
+  }
+
+  /**
+   * Decode at a bounded size.
+   *
+   * createImageBitmap decodes AND downscales in one step, so a huge photo never
+   * becomes a huge bitmap. The size it targets was read from the file header
+   * first (image-guard.js) — that is what stops a small-on-disk decompression
+   * bomb, which a byte cap alone cannot. Browsers without it, and HEIC files the
+   * bitmap path declines, fall back to an <img>.
+   */
+  function decodePhoto(file, guard) {
+    var viaImage = function () { return blobToImage(file); };
+    var decoded = (typeof createImageBitmap === 'function')
+      ? createImageBitmap(file, bitmapOptions(guard)).catch(viaImage)
+      : viaImage();
+
+    return decoded.then(function (src) {
+      var w = src.naturalWidth || src.width || 0;
+      var h = src.naturalHeight || src.height || 0;
+      if (w * h > IG.MAX_PIXELS) {
+        closeSource(src);
+        throw new Error('That image is too large to process — please use a smaller photo.');
+      }
+      return src;
+    }).catch(function (err) {
+      if (err && /too large/i.test(err.message || '')) throw err;
+      if (guard.kind === 'heic') {
+        throw new Error('This browser cannot open a HEIC (iPhone) photo. It works in Safari on an ' +
+          'iPhone or Mac; elsewhere, export the photo as JPEG first, or set the iPhone camera to ' +
+          'Settings → Camera → Formats → Most Compatible.');
+      }
+      throw new Error('Could not read that image — it may be damaged or an unsupported format.');
+    });
+  }
+
   function recogniseText(canvas, onProgress) {
     return getWorker(onProgress).then(function (w) {
       return w.recognize(canvas).then(function (res) { return res.data.text || ''; });
     });
   }
 
-  function handleImage(blob) {
+  function handleImage(file) {
+    if (!IG) { toast('The image checks failed to load — reload the page.'); return; }
+    // Cheap checks before any decode or UI work: format, byte cap, pixel cap.
+    readHead(file).then(function (head) {
+      var guard = IG.check(file.size, head);
+      if (!guard.ok) { toast(guard.reason); return; }
+      return runScan(file, guard);
+    }).catch(function (err) {
+      toast(err.message || 'Could not read that file');
+    });
+  }
+
+  function runScan(file, guard) {
     $('progressPanel').hidden = false;
     $('result').hidden = true;
     Array.prototype.forEach.call(document.querySelectorAll('.js-transient'), function (n) { n.remove(); });
@@ -778,7 +848,7 @@ dialog .sheet {
     paintSteps(); setProgress(0.05);
     $('progressPanel').scrollIntoView({ block: 'nearest' });
 
-    blobToImage(blob).then(function (img) {
+    decodePhoto(file, guard).then(function (img) {
       stepState.load = 'done'; stepState.ocr = 'active'; paintSteps();
 
       var plain = preprocess(img, 'contrast');
@@ -796,6 +866,12 @@ dialog .sheet {
           var merged = text + '\n' + text2;
           return { text: merged, found: C.extract(merged) };
         });
+      }).then(function (res) {
+        closeSource(img);        // release the decoded bitmap now the passes are done
+        return res;
+      }, function (err) {
+        closeSource(img);
+        throw err;
       });
     }).then(function (out) {
       setProgress(1);

@@ -6,7 +6,7 @@
  *   node tools/e2e.mjs [--url http://localhost:8788/] [--headed]
  *
  * What it actually exercises:
- *   - the page boots with no console errors and all four modules loaded
+ *   - the page boots with no console errors and all five modules loaded
  *   - the typed-GSTIN path renders a verdict
  *   - a bill photo fed into the real file input goes through OCR, extraction,
  *     bill parsing and the verdict engine, and comes out the other side
@@ -226,6 +226,7 @@ try {
     libs: {
       GstinCore: typeof window.GstinCore,
       BillParse: typeof window.BillParse,
+      ImageGuard: typeof window.ImageGuard,
       ImagePrep: typeof window.ImagePrep,
       Tesseract: typeof window.Tesseract
     },
@@ -236,7 +237,7 @@ try {
     cameraBtn: !!document.getElementById('cameraBtn'),
     manifest: !!document.querySelector('link[rel=manifest]')
   }))()`);
-  check('four modules loaded in the page', Object.values(boot.libs).every((v) => v === 'object' || v === 'function' || v !== 'undefined'),
+  check('five modules loaded in the page', Object.values(boot.libs).every((v) => v === 'object' || v === 'function' || v !== 'undefined'),
     boot.libs);
   check('Tesseract loaded from the CDN', boot.libs.Tesseract === 'object', boot.libs.Tesseract);
   check('check digit agrees inside the browser', boot.checkDigit === 'V', boot.checkDigit);

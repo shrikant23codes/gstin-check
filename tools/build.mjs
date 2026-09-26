@@ -28,6 +28,7 @@ const FILES = [
   'index.html',
   'gstin-core.js',
   'bill-parse.js',
+  'image-guard.js',
   'image-prep.js',
   'sw.js',
   'manifest.webmanifest',
