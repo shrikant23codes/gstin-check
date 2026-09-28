@@ -952,9 +952,10 @@ dialog .sheet {
   }
 
   // ------------------------------------------------------------------- typing
+  var typeTimer = null;
   function typeCheck() {
-    var raw = $('gstinInput').value;
-    var s = C.normalize(raw);
+    clearTimeout(typeTimer);              // any keystroke cancels a pending check
+    var s = C.normalize($('gstinInput').value);
     var hint = $('typeHint');
     if (s.length < 2) { hint.hidden = true; return; }
     if (s.length !== 15) {
@@ -962,19 +963,16 @@ dialog .sheet {
       hint.textContent = s.length + ' of 15 characters.';
       return;
     }
-    var d = C.decode(s);
-    if (d.valid) {
-      hint.hidden = false;
-      hint.style.color = 'var(--ok)';
-      hint.textContent = 'Valid number — ' + d.stateName + '. Press Enter to check it.';
-      return;
-    }
-    hint.hidden = false;
-    hint.style.color = 'var(--bad)';
-    hint.textContent = d.issues.length ? d.issues[0].message : 'Not a valid GSTIN.';
+    // Complete: let the typing settle, then copy it out and check it — no Enter.
+    hint.hidden = true;
+    typeTimer = setTimeout(function () {
+      copy(s, 'GSTIN copied to clipboard');
+      submitTyped();
+    }, 500);
   }
 
   function submitTyped() {
+    clearTimeout(typeTimer);              // Enter commits now; cancel the pending timer
     var s = C.normalize($('gstinInput').value);
     if (s.length < 15) { toast('A GSTIN is 15 characters'); return; }
     // Only overwrite the bill figures when there is a scanned bill behind them.
